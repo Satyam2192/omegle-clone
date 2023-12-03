@@ -144,7 +144,7 @@ const Chat = () => {
 
   // useEffect to set up socket connection
   useEffect(() => {
-    socketRef.current = io('https://sk-omegle-backend.onrender.com/');
+    socketRef.current = io('https://sk-omegle-backend.onrender.com');
 
     socketRef.current.on('connected', ({ userId, partnerUserId }) => {
       setTargetUserId(userId);
