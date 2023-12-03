@@ -103,7 +103,7 @@ const Chat = () => {
   
 
   useEffect(() => {
-    socketRef.current = io('http://localhost:8000');
+    socketRef.current = io('https://sk-omegle-backend.onrender.com/');
 
     socketRef.current.on('connected', ({ userId, partnerUserId }) => {
       setTargetUserId(userId);
