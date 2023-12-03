@@ -1,10 +1,8 @@
-"use client"
+"use client";
 import { useRef, useEffect, useState } from 'react';
 import io from 'socket.io-client';
 
-// Chat component
 const Chat = () => {
-  // State and refs initialization
   const [messages, setMessages] = useState([]);
   const [message, setMessage] = useState('');
   const [onlineUsers, setOnlineUsers] = useState(0);
@@ -15,13 +13,11 @@ const Chat = () => {
   const remoteVideoRef = useRef();
   const peerConnectionRef = useRef();
 
-  // Function to handle skipping to the next user
   const handleSkip = () => {
     socketRef.current.emit('skip', targetUserId);
     setTargetUserId(null);
   };
 
-  // Function to send a message
   const handleSendMessage = () => {
     if (message.trim() !== '') {
       socketRef.current.emit('message', message);
@@ -29,63 +25,45 @@ const Chat = () => {
     }
   };
 
-  // Function to set up ICE candidates and offer/answer handling
   const setupICEHandling = () => {
-    // Implement ICE candidate handling
     peerConnectionRef.current.onicecandidate = (event) => {
       if (event.candidate) {
-        // Send the ICE candidate to the other user
-        socketRef.current.emit('ice-candidate', event.candidate, targetUserId);
+        socketRef.current.emit('ice-candidate', event.candidate, partnerUserId);
       }
     };
-
-    // Implement offer/answer handling
+  
     socketRef.current.on('offer', async (offer, senderUserId) => {
-      // Handle incoming offer
-      // ...
-
-      // Example: Set remote description
+      if (peerConnectionRef.current.signalingState !== 'stable') return;
       await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(offer));
-
-      // Example: Create and send answer
       const answer = await peerConnectionRef.current.createAnswer();
       await peerConnectionRef.current.setLocalDescription(answer);
       socketRef.current.emit('answer', answer, senderUserId);
     });
-
+  
     socketRef.current.on('answer', async (answer) => {
-      // Handle incoming answer
-      // ...
-
-      // Example: Set remote description
+      if (peerConnectionRef.current.signalingState !== 'stable') return;
       await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(answer));
     });
-
+  
     socketRef.current.on('ice-candidate', async (candidate) => {
-      // Handle incoming ICE candidate
-      // ...
-
-      // Example: Add the ICE candidate to the peer connection
-      await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(candidate));
+      if (candidate) {
+        await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(candidate));
+      }
     });
   };
 
-  // Function to clean up video call
   const cleanupVideoCall = () => {
-    // Close the peer connection
     if (peerConnectionRef.current) {
       peerConnectionRef.current.close();
       peerConnectionRef.current = null;
     }
 
-    // Stop and close the local video stream
     const localStream = localVideoRef.current ? localVideoRef.current.srcObject : null;
     if (localStream) {
       localStream.getTracks().forEach((track) => track.stop());
       localVideoRef.current.srcObject = null;
     }
 
-    // Stop and close the remote video stream
     const remoteStream = remoteVideoRef.current ? remoteVideoRef.current.srcObject : null;
     if (remoteStream) {
       remoteStream.getTracks().forEach((track) => track.stop());
@@ -93,63 +71,44 @@ const Chat = () => {
     }
   };
 
-  // Function to set up video call
+  
+  
   const setupVideoCall = async () => {
-    // Example: Get user media
     const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
     localVideoRef.current.srcObject = stream;
-
-    // Example: Create peer connection
+  
     peerConnectionRef.current = new RTCPeerConnection();
-
-    // Example: Add tracks to peer connection
+  
     stream.getTracks().forEach((track) => {
       peerConnectionRef.current.addTrack(track, stream);
     });
-
-    // Set up ICE candidates and offer/answer handling
+  
     setupICEHandling();
-
-    // Example: Set remote video element source
+  
     peerConnectionRef.current.ontrack = (event) => {
-      if (event.streams[0].id === targetUserId) {
-        localVideoRef.current.srcObject = event.streams[0];
-      } else if (event.streams[0].id === partnerUserId) {
-        remoteVideoRef.current.srcObject = event.streams[0];
+      if (remoteVideoRef.current && !remoteVideoRef.current.srcObject) {
+        remoteVideoRef.current.srcObject = new MediaStream(event.track);
       }
     };
-
-    // Additional logic to handle partner disconnect
+  
     socketRef.current.on('partnerDisconnected', () => {
       cleanupVideoCall();
-      // Additional logic to handle partner disconnection
     });
-
-    try {
-      // Example: Create and send offer
-      const offer = await peerConnectionRef.current.createOffer();
-
-      // Check signaling state before setting local description
-      if (peerConnectionRef.current.signalingState === 'stable') {
-        await peerConnectionRef.current.setLocalDescription(offer);
-        // Use targetUserId from state
-        socketRef.current.emit('offer', offer, targetUserId);
-      } else {
-        console.warn('Signaling state is not stable. Offer not sent.');
-      }
-    } catch (error) {
-      console.error('Error accessing camera and/or microphone:', error);
-    }
+  
+    const offer = await peerConnectionRef.current.createOffer();
+    await peerConnectionRef.current.setLocalDescription(offer);
+    socketRef.current.emit('offer', offer, partnerUserId);
   };
+  
+  
 
-  // useEffect to set up socket connection
   useEffect(() => {
-    socketRef.current = io('https://sk-omegle-backend.onrender.com');
+    socketRef.current = io('http://localhost:8000');
 
     socketRef.current.on('connected', ({ userId, partnerUserId }) => {
       setTargetUserId(userId);
       setPartnerUserId(partnerUserId);
-      setupVideoCall(); // Initialize video call setup here
+      setupVideoCall();
     });
 
     socketRef.current.on('message', ({ userId, message }) => {
@@ -168,16 +127,15 @@ const Chat = () => {
     });
 
     socketRef.current.on('skip', () => {
-      // Handle skip response (if needed)
+      // Handle skip response if needed
     });
 
     return () => {
       socketRef.current.disconnect();
       cleanupVideoCall();
     };
-  }, []); // Remove dependencies to avoid re-running useEffect
+  }, []); 
 
-  // Return the JSX structure
   return (
     <div className="flex flex-col h-screen">
       <div className="flex-1 p-4 overflow-y-auto">
@@ -203,7 +161,6 @@ const Chat = () => {
         </button>
       </div>
       <div>
-        {/* Add video call elements here */}
         <video ref={localVideoRef} autoPlay muted className="w-1/2" />
         <video ref={remoteVideoRef} autoPlay className="w-1/2" />
       </div>
